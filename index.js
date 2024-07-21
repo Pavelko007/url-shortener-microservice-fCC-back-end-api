@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { lookup } = require("dns");
 const app = express();
 
 const urlDatabase = {};
@@ -20,14 +21,34 @@ app.get("/", (req, res) => {
 
 app.post("/api/shorturl", (req, res) => {
   const originalUrl = req.body.url;
-  const existingShortUrl = Object.keys(urlDatabase).find(key => urlDatabase[key] === originalUrl);
-  if (existingShortUrl) {
-    res.json({ original_url: originalUrl, short_url: existingShortUrl });
+  const urlError = { error: "invalid url" };
+  if (!originalUrl) {
+    res.json(urlError);
     return;
   }
-  const shortUrl = Object.keys(urlDatabase).length + 1;
-  urlDatabase[shortUrl] = originalUrl;
-  res.json({ original_url: originalUrl, short_url: shortUrl });
+  const urlParts = originalUrl.split("//");
+  const hostname = urlParts.length >= 2 ? urlParts[1].split("/")[0] : null;
+  if (!hostname) {
+    res.json(urlError);
+    return;
+  }
+
+  lookup(hostname, (err) => {
+    if (err) {
+      res.json(urlError);
+      return;
+    }
+    const existingShortUrl = Object.keys(urlDatabase).find(
+      (key) => urlDatabase[key] === originalUrl
+    );
+    if (existingShortUrl) {
+      res.json({ original_url: originalUrl, short_url: existingShortUrl });
+      return;
+    }
+    const shortUrl = Object.keys(urlDatabase).length + 1;
+    urlDatabase[shortUrl] = originalUrl;
+    res.json({ original_url: originalUrl, short_url: shortUrl });
+  });
 });
 
 app.get("/api/shorturl/:short_url", (req, res) => {
